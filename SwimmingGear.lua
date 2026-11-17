@@ -61,6 +61,41 @@ local EQUIP_LOCS = {
 	INVTYPE_TABARD = { 19 },
 }
 
+-- Every armor type the class can wear (not only the "best" type).
+-- Cloth=1 Leather=2 Mail=3 Plate=4
+local ARMOR_SUB_NAME = {
+	[1] = "Cloth",
+	[2] = "Leather",
+	[3] = "Mail",
+	[4] = "Plate",
+	Cloth = 1,
+	Leather = 2,
+	Mail = 3,
+	Plate = 4,
+}
+
+local CLASS_ARMOR = {
+	WARRIOR = { [1] = true, [2] = true, [3] = true, [4] = true },
+	PALADIN = { [1] = true, [2] = true, [3] = true, [4] = true },
+	DEATHKNIGHT = { [1] = true, [2] = true, [3] = true, [4] = true },
+	HUNTER = { [1] = true, [2] = true, [3] = true },
+	SHAMAN = { [1] = true, [2] = true, [3] = true },
+	EVOKER = { [1] = true, [2] = true, [3] = true },
+	ROGUE = { [1] = true, [2] = true },
+	DRUID = { [1] = true, [2] = true },
+	MONK = { [1] = true, [2] = true },
+	DEMONHUNTER = { [1] = true, [2] = true },
+	MAGE = { [1] = true },
+	PRIEST = { [1] = true },
+	WARLOCK = { [1] = true },
+}
+
+local SHIELD_CLASSES = {
+	WARRIOR = true,
+	PALADIN = true,
+	SHAMAN = true,
+}
+
 local BACKDROP = {
 	bgFile = "Interface\\Buttons\\WHITE8x8",
 	edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -500,21 +535,82 @@ local function SlotTexture(info)
 	return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
+local function PlayerClass()
+	local _, class = UnitClass("player")
+	return class
+end
+
+local function ArmorSubId(subclassID, subName)
+	if subclassID and ARMOR_SUB_NAME[subclassID] then
+		return subclassID
+	end
+	if type(subName) == "string" then
+		return ARMOR_SUB_NAME[subName]
+	end
+end
+
+local function ClassCanWearArmor(subclassID, subName)
+	local class = PlayerClass()
+	local allowed = class and CLASS_ARMOR[class]
+	local subId = ArmorSubId(subclassID, subName)
+	if not subId then
+		return true
+	end
+	if not allowed then
+		return true
+	end
+	return allowed[subId] == true
+end
+
+local function ClassCanWearShield()
+	local class = PlayerClass()
+	return class and SHIELD_CLASSES[class] == true
+end
+
 local function CanWearInSlot(slot, itemID, link)
 	if not itemID then
 		return false
 	end
-	if not IsEquippable(link or itemID) then
-		return false
-	end
-	local name, itemLink, _, _, reqLevel, _, _, _, loc = ItemInfo(link or itemID)
-	if not name then
-		loc = select(4, ItemInfoInstant(itemID))
+	local name, itemLink, _, _, reqLevel, className, subName, _, loc, _, _, classID, subclassID = ItemInfo(link or itemID)
+	if not loc then
+		-- GetItemInfoInstant: itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subclassID
+		local _, instantType, instantSub, instantLoc, _, instantClass, instantSubId = ItemInfoInstant(itemID)
+		loc = loc or instantLoc
+		className = className or instantType
+		subName = subName or instantSub
+		classID = classID or instantClass
+		subclassID = subclassID or instantSubId
 	end
 	if reqLevel and UnitLevel("player") < reqLevel then
 		return false
 	end
 	if not SlotFitsLoc(slot, loc) then
+		return false
+	end
+
+	-- Armor: include every type this class can wear (hunter cloth+leather+mail, etc).
+	-- Do not use IsEquippableItem here; some clients only treat the "best" type as equippable.
+	if classID == 4 or className == "Armor" then
+		if loc == "INVTYPE_CLOAK" or loc == "INVTYPE_NECK" or loc == "INVTYPE_FINGER" or loc == "INVTYPE_TRINKET" or loc == "INVTYPE_HOLDABLE" or loc == "INVTYPE_BODY" or loc == "INVTYPE_TABARD" then
+			return true, name, itemLink or link
+		end
+		if loc == "INVTYPE_SHIELD" or subclassID == 6 or subName == "Shields" or subName == "Shield" then
+			if not ClassCanWearShield() then
+				return false
+			end
+			return true, name, itemLink or link
+		end
+		local subId = ArmorSubId(subclassID, subName)
+		if subId then
+			if not ClassCanWearArmor(subclassID, subName) then
+				return false
+			end
+			return true, name, itemLink or link
+		end
+		return true, name, itemLink or link
+	end
+
+	if not IsEquippable(link or itemID) then
 		return false
 	end
 	return true, name, itemLink or link

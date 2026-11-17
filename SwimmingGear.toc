@@ -2,7 +2,7 @@
 ## Title: Swimming Gear
 ## Notes: Auto-swaps saved gear while swimming (out of combat). Type /swimg or /swimgear
 ## Author: Micheal
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariablesPerCharacter: SwimmingGearDB
 ## IconTexture: Interface\Icons\INV_Misc_Head_Murloc_01
 ## Category-enUS: Inventory
