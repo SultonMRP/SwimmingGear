@@ -288,6 +288,22 @@ local function EnsureDB()
 	if db.delay == nil then
 		db.delay = DEFAULT_DELAY
 	end
+	if db.enabled == nil then
+		db.enabled = false
+	end
+	if type(db.minimapIcon) ~= "table" then
+		db.minimapIcon = {}
+	end
+	if db.minimap and db.minimap.angle and db.minimapIcon.minimapPos == nil then
+		db.minimapIcon.minimapPos = db.minimap.angle
+	end
+	if db.minimapIcon.hide == nil then
+		db.minimapIcon.hide = false
+	end
+end
+
+local function IsEnabled()
+	return db and db.enabled == true
 end
 
 local function SavedSlot(slot)
@@ -501,6 +517,13 @@ local function OnTick(self, elapsed)
 	end
 	elapsedAcc = 0
 	if not db then
+		return
+	end
+	if not IsEnabled() then
+		lastDryStart = nil
+		if HasOriginals() then
+			RestoreLandGear()
+		end
 		return
 	end
 
@@ -786,6 +809,17 @@ local function RefreshItemList()
 	ui.itemContent:SetHeight(math.max(height, 1))
 end
 
+local function RefreshStatus()
+	if not ui.statusFS then
+		return
+	end
+	if IsEnabled() then
+		ui.statusFS:SetText("|cff66ff66ON|r  (left-click minimap to turn off)")
+	else
+		ui.statusFS:SetText("|cffff6666OFF|r  (left-click minimap to turn on)")
+	end
+end
+
 local function DigitsOnly(text)
 	text = text or ""
 	local out = {}
@@ -827,17 +861,21 @@ local function CreateUI()
 	title:SetPoint("TOP", 0, -12)
 	title:SetText("Swimming Gear")
 
+	local status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	status:SetPoint("TOP", title, "BOTTOM", 0, -2)
+	ui.statusFS = status
+
 	local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 
 	local help = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	help:SetPoint("TOPLEFT", 14, -34)
-	help:SetPoint("TOPRIGHT", -14, -34)
+	help:SetPoint("TOPLEFT", 14, -48)
+	help:SetPoint("TOPRIGHT", -14, -48)
 	help:SetJustifyH("LEFT")
-	help:SetText("Pick a slot, then an item from your bags. That item is worn in water (out of combat). Original gear is put back after the delay.")
+	help:SetText("Off by default. Minimap fish: left-click on/off, right-click this window. Pick a slot, then a bag item. Worn in water (out of combat). Original gear returns after the delay.")
 
 	local left = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	left:SetPoint("TOPLEFT", 12, -70)
+	left:SetPoint("TOPLEFT", 12, -84)
 	left:SetPoint("BOTTOMLEFT", 12, 52)
 	left:SetWidth(188)
 	ApplyBackdrop(left, 0.03, 0.03, 0.04, 0.9)
@@ -963,6 +1001,7 @@ local function CreateUI()
 		if ui.delayBox then
 			ui.delayBox:SetText(tostring(DelaySeconds()))
 		end
+		RefreshStatus()
 		RefreshSlotButtons()
 		RefreshItemList()
 	end)
@@ -975,6 +1014,73 @@ local function ToggleUI()
 	else
 		ui.frame:Show()
 	end
+end
+
+local ldbPlugin
+
+local function UpdateMinimapLook()
+	if not ldbPlugin then
+		return
+	end
+	if IsEnabled() then
+		ldbPlugin.iconR, ldbPlugin.iconG, ldbPlugin.iconB = 1, 1, 1
+	else
+		ldbPlugin.iconR, ldbPlugin.iconG, ldbPlugin.iconB = 0.55, 0.55, 0.55
+	end
+end
+
+local function ToggleEnabled()
+	EnsureDB()
+	db.enabled = not IsEnabled()
+	if IsEnabled() then
+		Chat("on")
+		if InWater() then
+			ApplySwimGear()
+		end
+	else
+		Chat("off")
+		if HasOriginals() and not InCombat() then
+			RestoreLandGear()
+		end
+	end
+	UpdateMinimapLook()
+	RefreshStatus()
+end
+
+local function SetupMinimapIcon()
+	if ldbPlugin then
+		return
+	end
+	EnsureDB()
+	local ldb = LibStub and LibStub("LibDataBroker-1.1", true)
+	local icon = LibStub and LibStub("LibDBIcon-1.0", true)
+	if not ldb or not icon then
+		return
+	end
+	ldbPlugin = ldb:NewDataObject("SwimmingGear", {
+		type = "launcher",
+		label = "Swimming Gear",
+		icon = "Interface\\Icons\\INV_Misc_Fish_02",
+		OnClick = function(_, button)
+			if button == "RightButton" then
+				EnsureDB()
+				CreateUI()
+				ui.frame:Show()
+				return
+			end
+			if button == "LeftButton" then
+				ToggleEnabled()
+			end
+		end,
+		OnTooltipShow = function(tt)
+			tt:AddLine("|cff33ccffSwimming Gear|r")
+			tt:AddLine(IsEnabled() and "Currently: ON" or "Currently: OFF", 0.8, 0.8, 0.8)
+			tt:AddLine("Left-click: on/off", 0.2, 1, 0.2)
+			tt:AddLine("Right-click: config", 0.2, 1, 0.2)
+		end,
+	})
+	icon:Register("SwimmingGear", ldbPlugin, db.minimapIcon)
+	UpdateMinimapLook()
 end
 
 local driver = CreateFrame("Frame")
@@ -991,9 +1097,17 @@ driver:SetScript("OnEvent", function(_, event, arg1)
 		end
 		EnsureDB()
 		driver:SetScript("OnUpdate", OnTick)
+		SetupMinimapIcon()
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		EnsureDB()
+		SetupMinimapIcon()
 	elseif event == "PLAYER_REGEN_ENABLED" then
+		if not IsEnabled() then
+			if HasOriginals() then
+				RestoreLandGear()
+			end
+			return
+		end
 		if InWater() then
 			ApplySwimGear()
 		elseif HasOriginals() then

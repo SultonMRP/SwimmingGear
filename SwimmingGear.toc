@@ -1,11 +1,16 @@
 ## Interface: 16001
 ## Title: Swimming Gear
-## Notes: Auto-swaps saved gear while swimming (out of combat). Type /swimg or /swimgear
+## Notes: Auto-swaps saved gear while swimming (out of combat). Off by default. /swimg or /swimgear
 ## Author: Micheal
-## Version: 1.0.1
+## Version: 1.0.3
 ## SavedVariablesPerCharacter: SwimmingGearDB
-## IconTexture: Interface\Icons\INV_Misc_Head_Murloc_01
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0
+## IconTexture: Interface\Icons\INV_Misc_Fish_02
 ## Category-enUS: Inventory
 ## X-Compatible-With: forever
 
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 SwimmingGear.lua
